@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import os
+import sys
 import argparse
 
 from struct import *
@@ -93,9 +94,17 @@ def ParseLatency(rw_mode,iodepth,rw_phase,block_size,line,lat_mode,slat_log,clat
         start_pos = line.find('(')
         end_pos = line.find(')')
         lat_val.unit = line[start_pos + 1:end_pos].strip()
-        lat_val.minVal = int(minVal(line))
-        lat_val.maxVal = int(maxVal(line))
-        lat_val.avgVal = float(avgVal(line))
+        if lat_val.unit == 'msec':
+            lat_val.minVal = int(minVal(line)) * 1000
+            lat_val.maxVal = int(maxVal(line)) * 1000
+            lat_val.avgVal = float(avgVal(line)) * 1000
+        elif lat_val.unit == 'usec':
+            lat_val.minVal = int(minVal(line))
+            lat_val.maxVal = int(maxVal(line))
+            lat_val.avgVal = float(avgVal(line))
+        else:
+            print("New unit!", lat_val.unit)
+            sys.exit("Sorry ...")
         lat_val.stdev = float(stdevVal(line))
 
         temp_key = dictKey(rw_phase, block_size, iodepth)
