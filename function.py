@@ -6,6 +6,9 @@ import argparse
 
 from struct import *
 
+curr_lat_unit = ''
+curr_bw_unit = ''
+
 def minVal(line):
     start_pos = line.find('min') + 4
     end_pos = line[start_pos:].find(',') + start_pos
@@ -28,6 +31,25 @@ def stdevVal(line):
     start_pos = line.find('stdev') + 6
 
     return line[start_pos:].strip()
+
+def writeMinMaxVal(min_val, min_unit, min_tempKey, max_val, max_unit, max_tempKey,
+        rw_mode, val_type, log_dir):
+    filename = log_dir + '/min_max_val_' + val_type + '.csv'
+    flag = False
+    if not os.path.exists(filename):
+        flag = True
+
+    file = open(filename, 'a+')
+    if flag:
+        flag = False
+        title_line = 'RW mode,RW phase,IO Depth,Blocksize,Min (' + min_unit + '),RW phase,IO Depth, Blocksize,Max (' + max_unit + ')\n'
+        file.write(title_line)
+        file.flush()
+
+    content_line = rw_mode + ',' + min_tempKey.phase + ',' + min_tempKey.iodepth + ',' + min_tempKey.blocksize \
+            + ',' + str(min_val) + ',' + max_tempKey.phase + ',' + max_tempKey.iodepth + ',' + max_tempKey.blocksize \
+            + ',' + str(max_val) + '\n'
+    file.write(content_line)
 
 def FileProcess(filename,rec_type,avg_bw_log,sample_bw_log,slat_log,clat_log,lat_log,iops_log):
     file = open(filename)
@@ -115,14 +137,14 @@ def ParseLatency(rw_mode,iodepth,rw_phase,block_size,line,lat_mode,slat_log,clat
             clat_log.setdefault(rw_mode, [])
             clat_log[rw_mode].append({temp_key: lat_val})
         else:
-            print('Key={0}, val={1}'.format(temp_key, lat_val))
+            #print('Key={0}, val={1}'.format(temp_key, lat_val))
             lat_log.setdefault(rw_mode, [])
             lat_log[rw_mode].append({temp_key: lat_val})
     #print("Latency:", latency_log)
 
 def ParseBandwidth(rw_mode,iodepth,rw_phase,block_size,line,avg_bw,sample_bw):
     if line.find('BW') != -1:
-        val_pos = line.find('BW') + 3
+        val_pos = (line.find('BW') + 3)
         val_end_pos = 0
         if line.find('MiB/s') != -1:
             val_end_pos = line.find('MiB')
@@ -130,6 +152,11 @@ def ParseBandwidth(rw_mode,iodepth,rw_phase,block_size,line,avg_bw,sample_bw):
         elif line.find('KiB/s') != -1:
             val_end_pos = line.find('KiB')
             bw_val = line[val_pos:val_end_pos] + ' KiB/s'
+        temp_end_pos = line.find('(')
+        unit = line[(temp_end_pos - 6):(temp_end_pos - 1)]
+        if unit != 'MiB/s' and unit != 'KiB/s':
+            print("New unit! line[{0}:{1}]={2}".format(val_pos, temp_end_pos, unit))
+            sys.exit("Sorry ...")
 
         temp_key = dictKey(rw_phase, block_size, iodepth)
         avg_bw.setdefault(rw_mode, [])
@@ -139,6 +166,10 @@ def ParseBandwidth(rw_mode,iodepth,rw_phase,block_size,line,avg_bw,sample_bw):
         end_pos = line.find(')')
         bw = bwType()
         bw.unit = line[pos:end_pos].strip()
+        if bw.unit != 'KiB/s' and bw.unit != 'MiB/s':
+            print("New unit!", bw.unit)
+            sys.exit("Sorry ...")
+
         bw.minVal = int(minVal(line))
         bw.maxVal = int(maxVal(line))
         bw.avgVal = float(maxVal(line))
@@ -167,6 +198,12 @@ def ParseIOPS(rw_mode,iodepth,block_size,line,iops_log):
     #print(iops_log)
 
 def WriteLatLog(log_dir, output_format, lat_type, lat_log):
+    min_val = 'inf'
+    min_unit = ''
+    min_tempKey = dictKey('','','')
+    max_val = '0'
+    max_unit = ''
+    max_tempKey = dictKey('','','')
     for rw_mode,val in sorted(lat_log.items()):
         filename = log_dir + '/' + rw_mode + '_' + lat_type
         if output_format.find('csv') != -1:
@@ -201,7 +238,7 @@ def WriteLatLog(log_dir, output_format, lat_type, lat_log):
 
             if flag:
                 flag = False
-                title_line = '# row\tiodepth\trw_phase\t4k\t16k\t32k\t64k\t128k\t256k\t512k\t1m\t4m\t8m\n'
+                title_line = '# row\tiodepth\trw_phase\t4k\t8k\t16k\t32k\t64k\t128k\t256k\t512k\t1m\t4m\t8m\n'
                 file.write(title_line)
                 file.flush()
 
@@ -222,11 +259,32 @@ def WriteLatLog(log_dir, output_format, lat_type, lat_log):
                             gpt_content_line += str(item[gpt_key].avgVal)
                             if bs != '8m':
                                 gpt_content_line += '\t'
+
+                            if float(max_val) < float(item[gpt_key].avgVal):
+                                max_val = str(item[gpt_key].avgVal)
+                                max_unit = item[gpt_key].unit
+                                max_tempKey.phase = gpt_key.phase
+                                max_tempKey.iodepth = gpt_key.iodepth
+                                max_tempKey.blocksize = gpt_key.blocksize
+                            if float(min_val) > float(item[gpt_key].avgVal):
+                                min_val = str(item[gpt_key].avgVal)
+                                min_unit = item[gpt_key].unit
+                                min_tempKey.phase = gpt_key.phase
+                                min_tempKey.iodepth = gpt_key.iodepth
+                                min_tempKey.blocksize = gpt_key.blocksize
                     gpt_content_line += '\n'
                     row += 1
                     if gpt_flag:
                         file.write(gpt_content_line)
                         file.flush()
+                if min_val != 'inf':
+                    writeMinMaxVal(min_val, min_unit, min_tempKey, max_val, max_unit, max_tempKey, rw_mode, 'lat', log_dir)
+                min_val = 'inf'
+                min_unit = ''
+                min_tempKey = dictKey('','','')
+                max_val = '0'
+                max_unit = ''
+                max_tempKey = dictKey('','','')
             if not os.path.exists(filename_2):
                 flag = True
 
@@ -257,9 +315,12 @@ def WriteLatLog(log_dir, output_format, lat_type, lat_log):
                         bs_file.flush()
 
 def WriteBandwidthLog(log_dir, output_format, bw_type, bw_log):
-    max_rw_mode = ''
     max_bw = '0'
-    max_temp_key = dictKey('','','')
+    max_unit = ''
+    max_tempKey = dictKey('','','')
+    min_bw = 'inf'
+    min_unit = ''
+    min_tempKey = dictKey('','','')
     for rw_mode,val in sorted(bw_log.items()):
         filename = log_dir + '/' + rw_mode + '_' + bw_type
         if output_format.find('csv') != -1:
@@ -285,18 +346,22 @@ def WriteBandwidthLog(log_dir, output_format, bw_type, bw_log):
                     content_line = temp_key.iodepth + ',' + temp_key.phase + ',' + str(temp_key.blocksize)
                     if bw_type == "avg_bw":
                         content_line = content_line + ',' + str(curr_bw_rec) +'\n'
-                        #print(temp_key, curr_bw_rec[:-6])
+                        # print(max_bw, curr_bw_rec)
                         if max_bw == '0' or (curr_bw_rec.find('KiB') == -1 and float(max_bw[:-6]) < float(curr_bw_rec[:-6])):
                             max_bw = curr_bw_rec
-                            max_rw_mode = rw_mode
-                            max_temp_key.iodepth = temp_key.iodepth
-                            max_temp_key.phase = temp_key.phase
-                            max_temp_key.blocksize = temp_key.blocksize
+                            max_tempKey.iodepth = temp_key.iodepth
+                            max_tempKey.phase = temp_key.phase
+                            max_tempKey.blocksize = temp_key.blocksize
                     elif bw_type == "sample_bw":
                         content_line = content_line + ',' + str(curr_bw_rec.minVal) + ',' + str(curr_bw_rec.maxVal) + ',' \
                                 + str(curr_bw_rec.avgVal) + ',' + str(curr_bw_rec.stdev) + '\n'
                     file.write(content_line)
                     file.flush()
+
+        if bw_type == 'avg_bw':
+            print("RW Mode={0}, IO Depth={1}, RW Phase={2}, Block Size={3}, Max BW={4}".format( \
+                    rw_mode, max_tempKey.iodepth, max_tempKey.phase, max_tempKey.blocksize, max_bw))
+        max_bw = '0'
         if output_format.find('gpt') != -1 and bw_type.find('avg_bw') != -1:
             filename_1 = log_dir + '/' + rw_mode + '_' + bw_type + '_iod.dat'
             filename_2 = log_dir + '/' + rw_mode + '_' + bw_type + '_bs.dat'
@@ -308,7 +373,7 @@ def WriteBandwidthLog(log_dir, output_format, bw_type, bw_log):
 
             if flag:
                 flag = False
-                title_line = '# row\tiodepth\trw_phase\t4k\t16k\t32k\t64k\t128k\t256k\t512k\t1m\t4m\t8m\n'
+                title_line = '# row\tiodepth\trw_phase\t4k\t8k\t16k\t32k\t64k\t128k\t256k\t512k\t1m\t4m\t8m\n'
                 file.write(title_line)
                 file.flush()
 
@@ -332,6 +397,18 @@ def WriteBandwidthLog(log_dir, output_format, bw_type, bw_log):
                                 bandw = str(float(item[gpt_key][:-6]) / 1024)
                             else:
                                 bandw = item[gpt_key][:-6]
+                            if float(max_bw) < float(bandw):
+                                max_bw = bandw
+                                max_unit = 'MiB/s'
+                                max_tempKey.phase = gpt_key.phase
+                                max_tempKey.iodepth = gpt_key.iodepth
+                                max_tempKey.blocksize = gpt_key.blocksize
+                            if float(min_bw) > float(bandw):
+                                min_bw = bandw
+                                min_unit = 'MiB/s'
+                                min_tempKey.phase = gpt_key.phase
+                                min_tempKey.iodepth = gpt_key.iodepth
+                                min_tempKey.blocksize = gpt_key.blocksize
                             gpt_content_line += bandw
                             if bs != '8m':
                                 gpt_content_line += '\t'
@@ -340,6 +417,14 @@ def WriteBandwidthLog(log_dir, output_format, bw_type, bw_log):
                     if gpt_flag:
                         file.write(gpt_content_line)
                         file.flush()
+                if min_bw != 'inf':
+                    writeMinMaxVal(min_bw, min_unit, min_tempKey, max_bw, max_unit, max_tempKey, rw_mode, 'bw', log_dir)
+                max_bw = '0'
+                max_unit = ''
+                max_tempKey = dictKey('','','')
+                min_bw = 'inf'
+                min_unit = ''
+                min_tempKey = dictKey('','','')
             if not os.path.exists(filename_2):
                 flag = True
 
@@ -375,14 +460,12 @@ def WriteBandwidthLog(log_dir, output_format, bw_type, bw_log):
                         bs_file.write(gpt_content_line)
                         bs_file.flush()
 
-    if bw_type == 'avg_bw':
-        print("RW Mode={0}, IO Depth={1}, RW Phase={2}, Block Size={3}, Max BW={4}".format( \
-                max_rw_mode, max_temp_key.iodepth, max_temp_key.phase, max_temp_key.blocksize, max_bw))
-
 def WriteIOPSLog(log_dir, output_format, iops_log):
     max_iops = '0'
     max_rw_mode = ''
-    max_temp_key = dictKey('','','')
+    max_tempKey = dictKey('','','')
+    min_iops = 'inf'
+    min_tempKey = dictKey('','','')
     for rw_mode,val in sorted(iops_log.items()):
         filename = log_dir + '/' + rw_mode + '_IOPS'
         if output_format.find('csv') != -1:
@@ -409,9 +492,9 @@ def WriteIOPSLog(log_dir, output_format, iops_log):
                     if (int(max_iops) < int(curr_iops)):
                         max_iops = curr_iops
                         max_rw_mode = rw_mode
-                        max_temp_key.iodepth = temp_key.iodepth
-                        max_temp_key.phase = temp_key.phase
-                        max_temp_key.blocksize = temp_key.blocksize
+                        max_tempKey.iodepth = temp_key.iodepth
+                        max_tempKey.phase = temp_key.phase
+                        max_tempKey.blocksize = temp_key.blocksize
                     file.write(content_line)
                     file.flush()
 
@@ -448,6 +531,17 @@ def WriteIOPSLog(log_dir, output_format, iops_log):
                                 iops_bs = str(int(float(item[gpt_key][:-1]) * 1000))
                             else:
                                 iops_bs = item[gpt_key]
+
+                            if float(max_iops) < float(iops_bs):
+                                max_iops = iops_bs
+                                max_tempKey.phase = gpt_key.phase
+                                max_tempKey.iodepth = gpt_key.iodepth
+                                max_tempKey.blocksize = gpt_key.blocksize
+                            if float(min_iops) > float(iops_bs):
+                                min_iops = iops_bs
+                                min_tempKey.phase = gpt_key.phase
+                                min_tempKey.iodepth = gpt_key.iodepth
+                                min_tempKey.blocksize = gpt_key.blocksize
                             gpt_content_line += iops_bs
                             if bs != '8m':
                                 gpt_content_line += '\t'
@@ -456,6 +550,12 @@ def WriteIOPSLog(log_dir, output_format, iops_log):
                     if gpt_flag:
                         file.write(gpt_content_line)
                         file.flush()
+                if min_iops != 'inf':
+                    writeMinMaxVal(min_iops, '', min_tempKey, max_iops, '', max_tempKey, rw_mode, 'iops', log_dir)
+                max_iops = '0'
+                max_tempKey = dictKey('','','')
+                min_iops = 'inf'
+                min_tempKey = dictKey('','','')
             if not os.path.exists(filename_2):
                 flag = True
 
@@ -492,6 +592,6 @@ def WriteIOPSLog(log_dir, output_format, iops_log):
 
 
     print("MAX IOPS: RW Mode={0}, IO Depth={1}, RW Phase={2}, Block Size={3}, IOPS={4}".format( \
-            max_rw_mode, max_temp_key.iodepth, max_temp_key.phase, max_temp_key.blocksize, max_iops))
+            max_rw_mode, max_tempKey.iodepth, max_tempKey.phase, max_tempKey.blocksize, max_iops))
 
 

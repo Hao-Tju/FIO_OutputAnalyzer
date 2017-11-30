@@ -33,17 +33,88 @@ gnuPlot()
   bname_no_ft=${2%%.*}
   temp_str=${bname_no_ft#*_}
   y_axis=${temp_str%_*}
-  y_label='lalal'
+  y_label=''
+  rw_mode=${bname_no_ft%%_*}
+  data_type=''
 
   echo "Now is processing $2"
   if [ $y_axis = 'lat' ]; then
     y_label="Latency(usec)"
+    data_type='lat'
   elif [ $y_axis = 'IOPS' ]; then
     y_label='IOPS'
+    data_type='iops'
   elif [ $y_axis = 'avg_bw' ]; then
     y_label='Average Bandwidth (MiB/s)'
+    data_type='bw'
   fi
 
+  :<<commentEOF
+  echo "data_type=$data_type"
+  for line in `sed -n '2~1p' ${1}/min_max_val_${data_type}.csv`
+  do
+    curr_rw_mode=$(awk -F, '{print $1}' <<<"$line")
+    if [ $curr_rw_mode = $rw_mode ]; then
+      curr_min_rw_phase=$(awk -F, '{print $2}' <<<"$line")
+      curr_min_iodepth=$(awk -F, '{print $3}' <<<"$line")
+      curr_min_blocksize=$(awk -F, '{print $4}' <<<"$line")
+      curr_min=$(awk -F, '{print $5}' <<<"$line")
+      curr_max_rw_phase=$(awk -F, '{print $6}' <<<"$line")
+      curr_max_iodepth=$(awk -F, '{print $7}' <<<"$line")
+      curr_max_blcoksize=$(awk -F, '{print $8}' <<<"$line")
+      curr_max=$(awk -F, '{print $9}' <<<"$line")
+    fi
+  done
+
+  case "$curr_min_blocksize" in
+    "4k") min_bs_x_pos=1 ;;
+    "8k") min_bs_x_pos=2 ;;
+    "16k") min_bs_x_pos=3 ;;
+    "32k") min_bs_x_pos=4 ;;
+    "64k") min_bs_x_pos=5 ;;
+    "128k") min_bs_x_pos=6 ;;
+    "256k") min_bs_x_pos=7 ;;
+    "512k") min_bs_x_pos=8 ;;
+    "1m") min_bs_x_pos=9 ;;
+    "4m") min_bs_x_pos=10 ;;
+    "8m") min_bs_x_pos=11 ;;
+  esac
+
+  case "$curr_min_iodepth" in
+    "1") min_iod_x_pos=1 ;;
+    "4") min_iod_x_pos=2 ;;
+    "8") min_iod_x_pos=3 ;;
+    "16") min_iod_x_pos=4 ;;
+    "32") min_iod_x_pos=5 ;;
+  esac
+
+  case "$curr_max_blocksize" in
+    "4k") max_bs_x_pos=1 ;;
+    "8k") max_bs_x_pos=2 ;;
+    "16k") max_bs_x_pos=3 ;;
+    "32k") max_bs_x_pos=4 ;;
+    "64k") max_bs_x_pos=5 ;;
+    "128k") max_bs_x_pos=6 ;;
+    "256k") max_bs_x_pos=7 ;;
+    "512k") max_bs_x_pos=8 ;;
+    "1m") max_bs_x_pos=9 ;;
+    "4m") max_bs_x_pos=10 ;;
+    "8m") max_bs_x_pos=11 ;;
+  esac
+
+  case "$curr_max_iodepth" in
+    "1") max_iod_x_pos=1 ;;
+    "4") max_iod_x_pos=2 ;;
+    "8") max_iod_x_pos=3 ;;
+    "16") max_iod_x_pos=4 ;;
+    "32") max_iod_x_pos=5 ;;
+  esac
+
+  set label "(${curr_min_iodepth},${curr_min})" at ${min_iod_x_pos},${curr_min} center tc palette z
+  set label "(${curr_max_iodepth},${curr_max})" at ${max_iod_x_pos},${curr_max} center tc palette z
+  set label "(${curr_min_blocksize},${curr_min})" at ${min_bs_x_pos},${curr_min} center tc palette z
+  set label "(${curr_min_blocksize},${curr_max})" at ${min_bs_x_pos},${curr_max} center tc palette z
+commentEOF
   var=${bname_no_ft##*_}
   if [ $var = 'iod' ]; then
     echo "Plotting ${bname_no_ft}.png"
@@ -97,14 +168,19 @@ gnuPlot2Phase()
   temp_str=${bname_no_ft#*_}
   y_axis=${temp_str%_*}
   y_label='lalal'
+  rw_mode=${bname_no_ft%%_*}
+  data_type=''
 
   echo "Now is processing $2"
   if [ $y_axis = 'lat' ]; then
     y_label="Latency(usec)"
+    data_type='lat'
   elif [ $y_axis = 'IOPS' ]; then
     y_label='IOPS'
+    data_type='iops'
   elif [ $y_axis = 'avg_bw' ]; then
     y_label='Average Bandwidth (MiB/s)'
+    data_type='bw'
   fi
 
   if [ ! -d ${1}/tmp_dat ]; then
@@ -122,6 +198,127 @@ gnuPlot2Phase()
     sed -n '13,$p' ${1}/${bname_no_ft}.dat >> ${1}/tmp_dat/${bname_no_ft}_write.dat
   fi
 
+  :<<commentEOF
+  for line in `sed -n '2~1p' ${1}/min_max_val_${data_type}.csv`
+  do
+    curr_rw_mode=$(awk -F, '{print $1}' <<<"$line")
+    if [ $curr_rw_mode = $rw_mode ]; then
+      curr_rw_phase=$(awk -F, '{print $2}' <<<"$line")
+      if [ $curr_rw_phase = 'read' ]; then
+        curr_r_min_iodepth=$(awk -F, '{print $3}' <<<"$line")
+        curr_r_min_blocksize=$(awk -F, '{print $4}' <<<"$line")
+        curr_r_min=$(awk -F, '{print $5}' <<<"$line")
+        curr_r_max_iodepth=$(awk -F, '{print $7}' <<<"$line")
+        curr_r_max_blcoksize=$(awk -F, '{print $8}' <<<"$line")
+        curr_r_max=$(awk -F, '{print $9}' <<<"$line")
+      elif [ $curr_rw_phase = 'write' ]; then
+        curr_w_min_iodepth=$(awk -F, '{print $3}' <<<"$line")
+        curr_w_min_blocksize=$(awk -F, '{print $4}' <<<"$line")
+        curr_w_min=$(awk -F, '{print $5}' <<<"$line")
+        curr_w_max_iodepth=$(awk -F, '{print $7}' <<<"$line")
+        curr_w_max_blcoksize=$(awk -F, '{print $8}' <<<"$line")
+        curr_w_max=$(awk -F, '{print $9}' <<<"$line")
+      fi
+    fi
+  done
+
+  case "$curr_r_min_blocksize" in
+    "4k") min_r_bs_x_pos=1 ;;
+    "8k") min_r_bs_x_pos=2 ;;
+    "16k") min_r_bs_x_pos=3 ;;
+    "32k") min_r_bs_x_pos=4 ;;
+    "64k") min_r_bs_x_pos=5 ;;
+    "128k") min_r_bs_x_pos=6 ;;
+    "256k") min_r_bs_x_pos=7 ;;
+    "512k") min_r_bs_x_pos=8 ;;
+    "1m") min_r_bs_x_pos=9 ;;
+    "4m") min_r_bs_x_pos=10 ;;
+    "8m") min_r_bs_x_pos=11 ;;
+  esac
+
+  case "$curr_r_min_iodepth" in
+    "1") min_r_iod_x_pos=1 ;;
+    "4") min_r_iod_x_pos=2 ;;
+    "8") min_r_iod_x_pos=3 ;;
+    "16") min_r_iod_x_pos=4 ;;
+    "32") min_r_iod_x_pos=5 ;;
+  esac
+
+  case "$curr_r_max_blocksize" in
+    "4k") max_r_bs_x_pos=1 ;;
+    "8k") max_r_bs_x_pos=2 ;;
+    "16k") max_r_bs_x_pos=3 ;;
+    "32k") max_r_bs_x_pos=4 ;;
+    "64k") max_r_bs_x_pos=5 ;;
+    "128k") max_r_bs_x_pos=6 ;;
+    "256k") max_r_bs_x_pos=7 ;;
+    "512k") max_r_bs_x_pos=8 ;;
+    "1m") max_r_bs_x_pos=9 ;;
+    "4m") max_r_bs_x_pos=10 ;;
+    "8m") max_r_bs_x_pos=11 ;;
+  esac
+
+  case "$curr_r_max_iodepth" in
+    "1") max_r_iod_x_pos=1 ;;
+    "4") max_r_iod_x_pos=2 ;;
+    "8") max_r_iod_x_pos=3 ;;
+    "16") max_r_iod_x_pos=4 ;;
+    "32") max_r_iod_x_pos=5 ;;
+  esac
+
+  case "$curr_w_min_blocksize" in
+    "4k") min_w_bs_x_pos=1 ;;
+    "8k") min_w_bs_x_pos=2 ;;
+    "16k") min_w_bs_x_pos=3 ;;
+    "32k") min_w_bs_x_pos=4 ;;
+    "64k") min_w_bs_x_pos=5 ;;
+    "128k") min_w_bs_x_pos=6 ;;
+    "256k") min_w_bs_x_pos=7 ;;
+    "512k") min_w_bs_x_pos=8 ;;
+    "1m") min_w_bs_x_pos=9 ;;
+    "4m") min_w_bs_x_pos=10 ;;
+    "8m") min_w_bs_x_pos=11 ;;
+  esac
+
+  case "$curr_w_min_iodepth" in
+    "1") min_w_iod_x_pos=1 ;;
+    "4") min_w_iod_x_pos=2 ;;
+    "8") min_w_iod_x_pos=3 ;;
+    "16") min_w_iod_x_pos=4 ;;
+    "32") min_w_iod_x_pos=5 ;;
+  esac
+
+  case "$curr_w_max_blocksize" in
+    "4k") max_w_bs_x_pos=1 ;;
+    "8k") max_w_bs_x_pos=2 ;;
+    "16k") max_w_bs_x_pos=3 ;;
+    "32k") max_w_bs_x_pos=4 ;;
+    "64k") max_w_bs_x_pos=5 ;;
+    "128k") max_w_bs_x_pos=6 ;;
+    "256k") max_w_bs_x_pos=7 ;;
+    "512k") max_w_bs_x_pos=8 ;;
+    "1m") max_w_bs_x_pos=9 ;;
+    "4m") max_w_bs_x_pos=10 ;;
+    "8m") max_w_bs_x_pos=11 ;;
+  esac
+
+  case "$curr_w_max_iodepth" in
+    "1") max_w_iod_x_pos=1 ;;
+    "4") max_w_iod_x_pos=2 ;;
+    "8") max_w_iod_x_pos=3 ;;
+    "16") max_w_iod_x_pos=4 ;;
+    "32") max_w_iod_x_pos=5 ;;
+  esac
+
+  set label "(${curr_r_min_iodepth},${curr_r_min})" at ${min_r_iod_x_pos},${curr_r_min} center tc palette z
+  set label "(${curr_r_max_iodepth},${curr_r_max})" at ${max_r_iod_x_pos},${curr_r_max} center tc palette z
+  set label "(${curr_w_min_iodepth},${curr_w_min})" at ${min_w_iod_x_pos},${curr_w_min} center tc palette z
+  set label "(${curr_w_max_iodepth},${curr_w_max})" at ${max_w_iod_x_pos},${curr_w_max} center tc palette z
+  set label "(${curr_r_min_blocksize},${curr_r_min})" at ${min_r_bs_x_pos},${curr_r_min} center tc palette z
+  set label "(${curr_r_min_blocksize},${curr_r_max})" at ${min_r_bs_x_pos},${curr_r_max} center tc palette z
+  set label "(${curr_w_min_blocksize},${curr_w_min})" at ${min_w_bs_x_pos},${curr_w_min} center tc palette z
+  set label "(${curr_w_min_blocksize},${curr_w_max})" at ${min_w_bs_x_pos},${curr_w_max} center tc palette z
+commentEOF
   curr_read_dat=${1}/tmp_dat/${bname_no_ft}_read.dat
   curr_write_dat=${1}/tmp_dat/${bname_no_ft}_write.dat
   if [ $var = 'iod' ]; then
