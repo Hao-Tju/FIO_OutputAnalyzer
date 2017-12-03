@@ -13,24 +13,45 @@ def minVal(line):
     start_pos = line.find('min') + 4
     end_pos = line[start_pos:].find(',') + start_pos
 
-    return line[start_pos:end_pos]
+    result = line[start_pos:end_pos]
+    unit = line[start_pos:end_pos][-1:]
+    if unit == 'k':
+        result = str(int(float(line[start_pos:end_pos][:-1]) * 1000))
+
+    return result
 
 def maxVal(line):
     start_pos = line.find('max') + 4
     end_pos = line[start_pos:].find(',') + start_pos
 
-    return line[start_pos:end_pos]
+    result = line[start_pos:end_pos]
+    unit = line[start_pos:end_pos][-1:]
+    if unit == 'k':
+        result = str(int(float(line[start_pos:end_pos][:-1]) * 1000))
+
+    return result
 
 def avgVal(line):
     start_pos = line.find('avg') + 4
     end_pos = line[start_pos:].find(',') + start_pos
 
-    return line[start_pos:end_pos]
+    result = line[start_pos:end_pos]
+    unit = line[start_pos:end_pos][-1:]
+    if unit == 'k':
+        result = str(int(float(line[start_pos:end_pos][:-1]) * 1000))
+
+    return result
 
 def stdevVal(line):
     start_pos = line.find('stdev') + 6
 
-    return line[start_pos:].strip()
+    result = line[start_pos:].strip()
+    unit = line[start_pos:].strip()[-1:]
+    if unit == 'k':
+        result = str(int(float(line[start_pos:].strip()[:-1]) * 1000))
+
+    return result
+    #return line[start_pos:].strip()
 
 def writeMinMaxVal(min_val, min_unit, min_tempKey, max_val, max_unit, max_tempKey,
         rw_mode, val_type, log_dir):
@@ -87,7 +108,7 @@ def FileProcess(filename,rec_type,avg_bw_log,sample_bw_log,slat_log,clat_log,lat
             elif rec_type.find('bw') != -1 and line.find('min') != -1:
                 ParseBandwidth(rw_mode, iodepth, rw_phase, blocksize, line, '', sample_bw_log)
 
-        if (analysis_flag and line.find('latency') != -1):
+        if analysis_flag and line.find('latency') != -1:
             analysis_flag = False
             rw_phase = ''
 
@@ -105,11 +126,11 @@ def FolderProcess(folder_name,rec_type,avg_bw_log,sample_bw_log,slat_log,clat_lo
 
 def ParseLatency(rw_mode,iodepth,rw_phase,block_size,line,lat_mode,slat_log,clat_log,lat_log):
     lat_val = latType()
-    if (lat_mode.find('sla') != -1):
+    if lat_mode.find('sla') != -1:
         lat_val.kind = 'slat'
-    elif (lat_mode.find('cla') != -1):
+    elif lat_mode.find('cla') != -1:
         lat_val.kind = 'clat'
-    elif (lat_mode.find('lat') != -1):
+    elif lat_mode.find('lat') != -1:
         lat_val.kind = 'lat'
 
     if (line.find('lat') != -1 and line.find('min') != -1):
@@ -120,6 +141,7 @@ def ParseLatency(rw_mode,iodepth,rw_phase,block_size,line,lat_mode,slat_log,clat
             lat_val.minVal = int(minVal(line)) * 1000
             lat_val.maxVal = int(maxVal(line)) * 1000
             lat_val.avgVal = float(avgVal(line)) * 1000
+            lat_val.unit = 'usec'
         elif lat_val.unit == 'usec':
             lat_val.minVal = int(minVal(line))
             lat_val.maxVal = int(maxVal(line))
@@ -128,6 +150,7 @@ def ParseLatency(rw_mode,iodepth,rw_phase,block_size,line,lat_mode,slat_log,clat
             print("New unit!", lat_val.unit)
             sys.exit("Sorry ...")
         lat_val.stdev = float(stdevVal(line))
+        #print("Latency min={0}, max={1}, avg={2}, stdev={3}".format(lat_val.minVal, lat_val.maxVal, lat_val.avgVal, lat_val.stdev))
 
         temp_key = dictKey(rw_phase, block_size, iodepth)
         if (lat_mode.find('sla') != -1 and line.find('slat') != -1):
