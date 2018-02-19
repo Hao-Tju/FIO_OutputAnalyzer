@@ -472,8 +472,11 @@ def WriteBandwidthLog(log_dir, output_format, bw_type, bw_log):
                             if item[gpt_key].find('KiB/s') != -1:
                                 print("Convert KiB/s to MiB/s ...")
                                 bandw = str(float(item[gpt_key][:-6]) / 1024)
-                            else:
+                            elif item[gpt_key].find('MiB/s') != -1:
                                 bandw = item[gpt_key][:-6]
+                            else:
+                                print("ERROR! Wrong unit ...")
+                                sys.exit("Sorry ...")
                             gpt_content_line += bandw
                             if iod != '32':
                                 gpt_content_line += '\t'
@@ -614,7 +617,7 @@ def WriteIOPSLog(log_dir, output_format, iops_log):
                         bs_file.flush()
 
 
-    print("MAX IOPS: RW Mode={0}, IO Depth={1}, RW Phase={2}, Block Size={3}, IOPS={4}".format( \
-            max_rw_mode, max_tempKey.iodepth, max_tempKey.phase, max_tempKey.blocksize, max_iops))
+#    print("MAX IOPS: RW Mode={0}, IO Depth={1}, RW Phase={2}, Block Size={3}, IOPS={4}".format( \
+#            max_rw_mode, max_tempKey.iodepth, max_tempKey.phase, max_tempKey.blocksize, max_iops))
 
 
